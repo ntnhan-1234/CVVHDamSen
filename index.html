@@ -2,226 +2,64 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Trình Xem File</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<title>Trình xem ảnh/video</title>
 <style>
-    body {
-        margin: 0;
-        font-family: Arial, sans-serif;
-        display: flex;
-        height: 100vh;
-        overflow: hidden;
-    }
-    /* Menu trái */
-    #sidebar {
-        width: 250px;
-        background: #f8f8f8;
-        border-right: 1px solid #ccc;
-        overflow-y: auto;
-        transition: transform 0.3s ease;
-    }
-    #sidebar.hidden {
-        transform: translateX(-100%);
-    }
-    #fileList {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    #fileList tr {
-        cursor: pointer;
-        border-bottom: 1px solid #ddd;
-    }
-    #fileList td {
-        padding: 10px;
-    }
-    /* Phần xem */
-    #viewer {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background: #000;
-        position: relative;
-        color: white;
-    }
-    #controls {
-        position: absolute;
-        top: 10px;
-        display: flex;
-        gap: 10px;
-    }
-    .nav-btn {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        font-size: 20px;
-        padding: 8px 12px;
-        cursor: pointer;
-    }
-    /* Zoom controls */
-    #zoomControls {
-        position: absolute;
-        bottom: 10px;
-        display: flex;
-        gap: 5px;
-    }
-    .zoom-btn {
-        background: rgba(255,255,255,0.2);
-        border: none;
-        color: white;
-        font-size: 18px;
-        padding: 6px 10px;
-        cursor: pointer;
-    }
-    /* Mobile */
-    #hamburger {
-        display: none;
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        font-size: 24px;
-        background: none;
-        border: none;
-        color: white;
-        z-index: 1001;
-    }
-    @media (max-width: 768px) {
-        #sidebar {
-            position: absolute;
-            height: 100%;
-            z-index: 1000;
-        }
-        #hamburger {
-            display: block;
-        }
-    }
+  body {
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  .viewer {
+    max-width: 90%;
+    max-height: 90%;
+    background: white;
+    padding: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  img, video {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; /* vừa khung, không cắt */
+    display: block;
+    margin: auto;
+  }
 </style>
 </head>
 <body>
 
-<!-- Sidebar -->
-<div id="sidebar" class="hidden">
-    <table id="fileList"></table>
-</div>
-
-<!-- Viewer -->
-<div id="viewer">
-    <button id="hamburger"><i class="fas fa-bars"></i></button>
-    <div id="controls">
-        <button class="nav-btn" id="prevBtn"><i class="fas fa-arrow-left"></i></button>
-        <button class="nav-btn" id="nextBtn"><i class="fas fa-arrow-right"></i></button>
-    </div>
-    <div id="content"></div>
-    <div id="zoomControls">
-        <button class="zoom-btn" id="zoomIn"><i class="fas fa-plus"></i></button>
-        <button class="zoom-btn" id="zoomOut"><i class="fas fa-minus"></i></button>
-        <button class="zoom-btn" id="zoomReset"><i class="fas fa-equals"></i></button>
-        <span id="zoomPercent">100%</span>
-    </div>
-</div>
+<div class="viewer" id="viewer"></div>
 
 <script>
-// Danh sách file
-const files = [
-    {name: "01.jpg"},
-    {name: "02.png"},
-    {name: "03.mp4"},
-    {name: "https://drive.google.com/uc?export=download&id=FILE_ID"}
-];
+  // Danh sách file video
+  const videoList = [3, 8, 66, 67, 74];
+  // Lấy số file từ query string (?id=...)
+  const urlParams = new URLSearchParams(window.location.search);
+  let id = parseInt(urlParams.get('id')) || 1;
 
-// Tạo tiêu đề file
-function getFileTitle(filename) {
-    let name = filename.split('/').pop();
-    let ext = name.split('.').pop().toLowerCase();
-    let base = name.replace(/\.[^/.]+$/, "");
-    if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
-        return `Hình Ảnh ${base}`;
-    } else if (['mp4','webm','ogg'].includes(ext)) {
-        return `Video ${base}`;
-    } else {
-        return `Tệp ${base}`;
-    }
-}
+  const viewer = document.getElementById('viewer');
 
-// Render menu
-const fileListEl = document.getElementById('fileList');
-files.forEach((f, idx) => {
-    let tr = document.createElement('tr');
-    tr.innerHTML = `<td>${getFileTitle(f.name)}</td>`;
-    tr.onclick = () => openFile(idx);
-    fileListEl.appendChild(tr);
-});
-
-let currentIndex = 0;
-let zoomLevel = 1;
-
-function openFile(index) {
-    currentIndex = index;
-    zoomLevel = 1;
-    document.getElementById('zoomPercent').textContent = "100%";
-    const viewer = document.getElementById('content');
-    viewer.innerHTML = "";
-    let file = files[index].name;
-    let ext = file.split('.').pop().toLowerCase();
-    if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
-        let img = document.createElement('img');
-        img.src = file;
-        img.style.maxWidth = "100%";
-        img.style.maxHeight = "90vh";
-        img.style.transform = `scale(${zoomLevel})`;
-        viewer.appendChild(img);
-    } else if (['mp4','webm','ogg'].includes(ext)) {
-        let vid = document.createElement('video');
-        vid.src = file;
-        vid.controls = true;
-        vid.style.maxWidth = "100%";
-        vid.style.maxHeight = "90vh";
-        viewer.appendChild(vid);
-    } else {
-        viewer.innerHTML = `<iframe src="${file}" style="width:90%;height:90%;border:none;"></iframe>`;
-    }
-    updateNavButtons();
-}
-
-function updateNavButtons() {
-    document.getElementById('prevBtn').style.display = currentIndex > 0 ? 'block' : 'none';
-    document.getElementById('nextBtn').style.display = currentIndex < files.length - 1 ? 'block' : 'none';
-}
-
-document.getElementById('prevBtn').onclick = () => openFile(currentIndex - 1);
-document.getElementById('nextBtn').onclick = () => openFile(currentIndex + 1);
-
-// Zoom
-document.getElementById('zoomIn').onclick = () => {
-    zoomLevel += 0.1;
-    applyZoom();
-};
-document.getElementById('zoomOut').onclick = () => {
-    zoomLevel = Math.max(0.1, zoomLevel - 0.1);
-    applyZoom();
-};
-document.getElementById('zoomReset').onclick = () => {
-    zoomLevel = 1;
-    applyZoom();
-};
-
-function applyZoom() {
-    let img = document.querySelector('#content img');
-    if (img) {
-        img.style.transform = `scale(${zoomLevel})`;
-        document.getElementById('zoomPercent').textContent = Math.round(zoomLevel * 100) + "%";
-    }
-}
-
-// Mobile menu toggle
-document.getElementById('hamburger').onclick = () => {
-    document.getElementById('sidebar').classList.toggle('hidden');
-};
-
-// Mặc định mở file đầu tiên
-openFile(0);
+  if (videoList.includes(id)) {
+    // Hiển thị video
+    viewer.innerHTML = `
+      <video controls autoplay>
+        <source src="image/${String(id).padStart(2, '0')}.mp4" type="video/mp4">
+        Trình duyệt của bạn không hỗ trợ video.
+      </video>
+    `;
+  } else {
+    // Hiển thị ảnh
+    viewer.innerHTML = `
+      <img src="image/${String(id).padStart(2, '0')}.jpg" alt="Ảnh số ${id}">
+    `;
+  }
 </script>
 
 </body>
